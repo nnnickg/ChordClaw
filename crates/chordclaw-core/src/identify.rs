@@ -1284,18 +1284,23 @@ fn chord_tone_bass_penalty_from_summary(
     bass: PitchClass,
 ) -> Option<u32> {
     let tone = summary.tone_for_pitch(bass)?;
-    Some(chord_tone_bass_penalty_for_degree(tone.degree))
+    Some(chord_tone_bass_penalty(summary, tone))
 }
 
-fn chord_tone_bass_penalty_for_degree(degree: u8) -> u32 {
-    match degree {
+fn chord_tone_bass_penalty(summary: CandidateFormulaSummary, tone: CandidateToneSummary) -> u32 {
+    match tone.degree {
         1 => 0,
         3 => 45,
         5 => 35,
         7 => 70,
+        9 | 11 | 13 if has_complete_seventh_core(summary) => 30,
         2 | 4 | 6 | 9 | 11 | 13 => 90,
         _ => 120,
     }
+}
+
+fn has_complete_seventh_core(summary: CandidateFormulaSummary) -> bool {
+    summary.has_degree(3) && summary.has_interval(5, 0) && summary.has_degree(7)
 }
 
 fn root_spelling_penalty(root: NoteName) -> u32 {

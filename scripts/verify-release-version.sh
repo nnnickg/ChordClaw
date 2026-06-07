@@ -6,6 +6,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 packages=(
   chordclaw-core
   chordclaw-cli
+  chordclaw-wasm
 )
 
 workspace_version=""

@@ -1220,6 +1220,18 @@ fn generated_chord_tone_slash_voicings_identify_back_as_slash_chords() {
 }
 
 #[test]
+fn prefers_complete_upper_extension_slash_over_altered_root_bass_cluster() {
+    let result = identify("232000").unwrap();
+    assert_eq!(
+        result.primary.as_ref().expect("primary analysis").symbol,
+        "Cmaj7#11/F#"
+    );
+    assert!(result.aliases.iter().any(|analysis| {
+        analysis.symbol == "F#7sus4b5b9" && analysis.class == AnalysisClass::TheoreticalAlias
+    }));
+}
+
+#[test]
 fn identifies_edge_enharmonic_roots_as_theoretical_aliases() {
     for (compact, expected) in [
         ("x24442", "Cb"),
