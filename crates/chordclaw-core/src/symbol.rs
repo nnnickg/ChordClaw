@@ -255,8 +255,6 @@ fn push_extension(out: &mut String, spec: &ChordSpec, text: &str) {
     }
 
     match spec.seventh {
-        Seventh::Major if spec.quality != Quality::Major => out.push_str("maj"),
-        Seventh::Major if spec.quality == Quality::Major && out.is_empty() => out.push_str("maj"),
         Seventh::Major => out.push_str("maj"),
         Seventh::Diminished | Seventh::Minor | Seventh::None => {}
     }

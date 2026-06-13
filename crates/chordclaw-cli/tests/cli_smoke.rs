@@ -396,6 +396,39 @@ fn json_output_treats_broken_pipe_as_success() {
 }
 
 #[test]
+fn completions_treats_broken_pipe_as_success() {
+    assert_broken_pipe_exits_cleanly(&["completions", "zsh"]);
+}
+
+#[test]
+fn non_numeric_flag_value_exits_as_usage_error() {
+    let output = chordclaw()
+        .args(["voicings", "--min-fret", "abc", "C"])
+        .output()
+        .expect("run chordclaw voicings --min-fret abc C");
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--min-fret"), "{stderr}");
+}
+
+#[test]
+fn analyze_json_emits_structured_fields() {
+    let output = chordclaw()
+        .args(["analyze", "--json", "Cmaj7"])
+        .output()
+        .expect("run chordclaw analyze --json Cmaj7");
+
+    assert_success(&output);
+    let value: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("analyze --json emits valid JSON");
+    assert_eq!(value["symbol"], "Cmaj7");
+    assert_eq!(value["root"], "C");
+    assert!(value["notes"].is_array());
+    assert!(value["intervals"].is_array());
+}
+
+#[test]
 fn voicings_rejects_pathological_limit() {
     let output = chordclaw()
         .args(["voicings", "--limit", "1000000", "Calt"])

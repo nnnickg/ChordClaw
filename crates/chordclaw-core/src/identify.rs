@@ -205,7 +205,7 @@ fn materialize_identify_result(
             analysis.analysis.class = classify_alias(&analysis.analysis, primary_score);
             analysis.analysis
         })
-        .take(24)
+        .take(MAX_IDENTIFY_ANALYSES - 1)
         .collect();
 
     IdentifyResult {
@@ -741,6 +741,8 @@ fn omission_strings(omissions: &InlineVec<InferredOmission, MAX_OMISSIONS>) -> V
 }
 
 fn slash_bass_name(root: NoteName, bass: PitchClass) -> NoteName {
+    // `slash_bass_interval` is mod 12, so the interval is always 0..=11; the
+    // final arm covers 10|11 and is the only value reachable for a `_` input.
     let steps = match slash_bass_interval(root, bass) {
         0 => 0,
         1 | 2 => 1,
@@ -748,8 +750,7 @@ fn slash_bass_name(root: NoteName, bass: PitchClass) -> NoteName {
         5 => 3,
         6 | 7 => 4,
         8 | 9 => 5,
-        10 | 11 => 6,
-        _ => unreachable!("slash interval is always mod 12"),
+        _ => 6,
     };
     let note = NoteName::spell_for_pitch(root.letter.advance(steps), bass);
     if note.accidental.unsigned_abs() <= MAX_NOTE_ACCIDENTALS {

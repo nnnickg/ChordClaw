@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+description = "Guitar and ukulele chord analysis and voicing command-line tool"
 publish = false
 
 [[bin]]

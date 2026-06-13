@@ -7,19 +7,21 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.4.3"
+version = "1.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nnnickg/chordclaw"
 homepage = "https://github.com/nnnickg/chordclaw"
 
 [workspace.dependencies]
-chordclaw-core = { path = "crates/chordclaw-core", version = "1.4.3" }
+chordclaw-core = { path = "crates/chordclaw-core", version = "1.5.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 clap = { version = "4.6.1", default-features = false, features = ["std", "help", "usage", "error-context"] }
 clap_complete = "4.6.1"
-wasm-bindgen = "0.2"
+# Pinned to the exact patch: the generated JS glue must match the installed
+# wasm-bindgen-cli version, and a floating minor invites mismatch build failures.
+wasm-bindgen = "=0.2.122"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
@@ -31,6 +33,7 @@ expect_used = "deny"
 panic = "deny"
 todo = "deny"
 unimplemented = "deny"
+unreachable = "deny"
 unwrap_used = "deny"
 
 [profile.release]
