@@ -14,7 +14,7 @@ chordclaw voicings Em
 
 ## Status
 
-Version 1.4.3. The engine separates chord theory from CLI formatting, uses
+Version 1.5.0. The engine separates chord theory from CLI formatting, uses
 deterministic ranking, and treats chord names as analyses over pitch-class sets
 rather than as chart entries.
 
@@ -118,7 +118,4 @@ cargo deny check
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0
-- MIT license
+Licensed under the MIT license.

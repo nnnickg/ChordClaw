@@ -81,6 +81,7 @@ struct IdentifyResponse {
 struct VoicingsQuery {
     chord: String,
     instrument: String,
+    tuning: String,
     min_fret: u8,
     max_fret: u8,
     max_span: u8,
@@ -141,7 +142,12 @@ fn generate_voicings(request_json: &str) -> Result<VoicingsResponse, String> {
         ));
     }
 
-    let instrument_text = request.instrument.as_deref().unwrap_or("guitar").trim();
+    let instrument_text = request
+        .instrument
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("guitar");
     let instrument = Instrument::parse(instrument_text).map_err(|error| error.to_string())?;
     let tuning = match request.tuning.as_deref().map(str::trim) {
         Some("") | None => instrument.default_tuning(),
@@ -190,7 +196,8 @@ fn generate_voicings(request_json: &str) -> Result<VoicingsResponse, String> {
         version: env!("CARGO_PKG_VERSION"),
         query: VoicingsQuery {
             chord: chord.to_owned(),
-            instrument: instrument_text.to_owned(),
+            instrument: instrument.to_string(),
+            tuning: tuning.to_string(),
             min_fret,
             max_fret,
             max_span,
@@ -349,6 +356,17 @@ mod voicings_tests {
         assert_eq!(value["engine"], "ChordClaw");
         assert!(value["voicings"].is_array());
         assert_eq!(value["query"]["chord"], "C");
+        assert_eq!(value["query"]["instrument"], "guitar");
+        assert_eq!(value["query"]["tuning"], "E A D G B E");
+    }
+
+    #[test]
+    fn empty_instrument_defaults_and_custom_tuning_is_echoed() {
+        let json = chordclaw_voicings(r#"{"chord":"C","instrument":"   ","tuning":"DADGAD"}"#);
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["query"]["instrument"], "guitar");
+        assert_eq!(value["query"]["tuning"], "D A D G A D");
     }
 }
 
