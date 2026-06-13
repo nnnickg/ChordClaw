@@ -1,7 +1,9 @@
 use serde::Serialize;
 
 use crate::formula::ChordFormula;
-use crate::identify::{InferredOmission, can_infer_omission, can_omit, inferred_omission_degrees};
+use crate::identify::{
+    InferredOmission, can_infer_omission, can_omit, inferred_omission_degrees, prefer_flat_pitch,
+};
 use crate::inline_vec::InlineVec;
 use crate::notes::{
     Fingering, GuitarTuning, Instrument, NoteName, PitchClass, PitchSet, STANDARD_TUNING,
@@ -1267,5 +1269,8 @@ fn voicing_note_name(pitch: PitchClass, search: &VoicingSearch<'_>) -> NoteName 
     {
         return bass;
     }
-    unreachable!("generated voicing pitch must be a formula tone or explicit bass")
+    // Every generated pitch is a formula tone or the explicit bass, so this is
+    // not reached in practice. Fall back to a plain spelling instead of
+    // aborting if that invariant is ever broken by a data change.
+    NoteName::simple_for_pitch(pitch, prefer_flat_pitch(pitch))
 }

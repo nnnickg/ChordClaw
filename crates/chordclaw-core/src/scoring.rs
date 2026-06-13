@@ -48,70 +48,19 @@ pub(crate) fn voicing_score_with_profile(
     string_count: usize,
     profile: &FretProfile,
 ) -> u32 {
-    if profile.active_count == 0 {
-        return u32::MAX;
-    }
-
-    let non_open = profile.non_open();
-    let position_cost = position_cost(profile);
-    let relative_cost = relative_fret_cost(profile);
-    let span_cost = fret_span_cost(profile);
-    let string_cost = active_string_cost(profile.active_count, string_count);
-    let internal_mute_cost = internal_mute_cost(profile);
-    let jump_cost = adjacent_fret_jump_cost(frets, string_count);
-    let duplicate_cost = duplicate_pitch_cost(frets, tuning, string_count);
-    let high_open_cost = high_open_mix_cost(frets, tuning.instrument(), profile, string_count);
-    let low_open_gap_cost = low_open_gap_cost(frets, string_count);
-    let preferred_bass_cost =
-        preferred_bass_mismatch_cost(frets, tuning, bass_rule.preferred(), string_count);
-    let harmonic_defect_cost = voicing_omission_cost(omissions, formula);
-    let internal_mute_quality_cost =
-        internal_mute_quality_cost(profile, formula, tuning.instrument());
-    let trailing_mute_cost = trailing_mute_cost(formula, profile);
-    let sparse_duplicate_cost =
-        sparse_duplicate_pitch_cost(frets, tuning, formula, profile, string_count);
-    let open_bypass_cost =
-        open_chord_tone_bypass_cost(frets, tuning, formula, profile, string_count);
-    let low_extension_cluster_cost =
-        low_added_ninth_cluster_cost(frets, tuning, formula, string_count);
-    let fingering_complexity_cost = fingering_complexity_cost(frets, string_count);
-    let instrument_cost =
-        instrument_voicing_cost(frets, tuning.instrument(), profile, string_count);
-    let instrument_bonus =
-        instrument_voicing_bonus(frets, tuning.instrument(), formula, profile, string_count);
-
-    let mut score = position_cost
-        + relative_cost
-        + span_cost
-        + string_cost
-        + internal_mute_cost
-        + jump_cost
-        + duplicate_cost
-        + high_open_cost
-        + low_open_gap_cost
-        + preferred_bass_cost;
-    score = score.saturating_sub(open_position_bonus(profile, string_count));
-    score = score.saturating_sub(open_root_bass_bonus(
+    // Single source of truth: the breakdown computes every component, and the
+    // ranking score is its total. Keeping one implementation means `--explain`
+    // can never disagree with the score that actually drives ranking.
+    voicing_score_breakdown_with_profile(
         frets,
         tuning,
-        bass_rule.preferred(),
+        bass_rule,
+        formula,
+        omissions,
         string_count,
-    ));
-    score = score.saturating_sub(open_bass_grip_bonus(frets, profile.has_open, string_count));
-    score = score.saturating_sub(closed_shape_bonus(non_open, profile, string_count));
-    score = score.saturating_sub(barre_grip_bonus(frets, non_open, profile, string_count));
-    score = score.saturating_sub(compact_low_grip_bonus(profile, string_count));
-    score = score.saturating_sub(jazz_shell_bonus(formula, profile));
-    let score = score
-        + harmonic_defect_cost
-        + internal_mute_quality_cost
-        + trailing_mute_cost
-        + sparse_duplicate_cost
-        + open_bypass_cost
-        + low_extension_cluster_cost
-        + fingering_complexity_cost
-        + instrument_cost;
-    score.saturating_sub(instrument_bonus)
+        profile,
+    )
+    .total
 }
 
 pub(crate) fn voicing_score_breakdown_with_profile(

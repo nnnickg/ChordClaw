@@ -87,9 +87,6 @@ pub(crate) fn split_bass(rest: &str) -> Result<(&str, Option<NoteName>), ChordCl
         return Ok((rest, None));
     };
     let after = &rest[idx + 1..];
-    if after.is_empty() {
-        return Err(ChordClawError::new("slash chord is missing bass note"));
-    }
     let Some(first) = after.chars().next() else {
         return Err(ChordClawError::new("slash chord is missing bass note"));
     };

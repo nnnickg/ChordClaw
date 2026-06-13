@@ -263,19 +263,22 @@ fn push_tone(tones: &mut InlineVec<RawTone, MAX_FORMULA_TONES>, tone: RawTone) {
 }
 
 pub(crate) fn natural_semitones(degree: u8) -> i16 {
-    match degree {
-        1 => 0,
-        2 => 2,
-        3 => 4,
-        4 => 5,
-        5 => 7,
-        6 => 9,
-        7 => 11,
-        9 => 14,
-        11 => 17,
-        13 => 21,
-        _ => unreachable!("validated chord degree"),
-    }
+    // Total over all u8 so no caller can trip a panic: reduce the degree to a
+    // simple degree (1..=7) plus an octave offset, then map via the major scale.
+    // Identical to the explicit table for the valid degrees {1,2,3,4,5,6,7,9,11,13}.
+    let simple = i16::from(degree.saturating_sub(1) % 7);
+    let octave = i16::from(degree.saturating_sub(1) / 7);
+    let base = match simple {
+        0 => 0,
+        1 => 2,
+        2 => 4,
+        3 => 5,
+        4 => 7,
+        5 => 9,
+        // `simple` is `_ % 7`, so this arm is reached only for 6.
+        _ => 11,
+    };
+    base + 12 * octave
 }
 
 fn degree_order(degree: u8) -> u8 {
@@ -295,16 +298,9 @@ fn degree_order(degree: u8) -> u8 {
 }
 
 pub(crate) fn degree_letter_steps(degree: u8) -> u8 {
-    match degree {
-        1 => 0,
-        2 | 9 => 1,
-        3 => 2,
-        4 | 11 => 3,
-        5 => 4,
-        6 | 13 => 5,
-        7 => 6,
-        _ => unreachable!("validated chord degree"),
-    }
+    // Letter advance from the root is just the diatonic degree index, mod 7.
+    // Total over all u8; matches the explicit table for every valid degree.
+    degree.saturating_sub(1) % 7
 }
 
 pub fn analyze_symbol(input: &str) -> Result<(ChordSymbol, ChordFormula), ChordClawError> {

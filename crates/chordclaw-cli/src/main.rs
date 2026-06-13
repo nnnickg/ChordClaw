@@ -62,10 +62,6 @@ enum CliError {
 }
 
 impl CliError {
-    fn data(message: impl Into<String>) -> Self {
-        Self::message(ChordClawErrorKind::Data, message)
-    }
-
     fn usage(message: impl Into<String>) -> Self {
         Self::message(ChordClawErrorKind::Usage, message)
     }
@@ -371,8 +367,15 @@ fn cmd_completions(matches: &ArgMatches) -> Result<(), CliError> {
         .parse::<Shell>()
         .map_err(|_| CliError::usage(format!("unsupported shell '{shell_text}'")))?;
     let mut command = cli();
-    let mut stdout = io::stdout();
-    generate(shell, &mut command, "chordclaw", &mut stdout);
+    // Render into a buffer first: clap_complete's generators write straight to
+    // the sink and `.expect(...)` on write errors, so generating directly to
+    // stdout panics on a broken pipe (e.g. `chordclaw completions zsh | head`).
+    // A `Vec<u8>` sink is infallible; the single drain goes through write_stdout.
+    let mut buffer = Vec::new();
+    generate(shell, &mut command, "chordclaw", &mut buffer);
+    let stdout = io::stdout();
+    let mut out = stdout.lock();
+    write_stdout(out.write_all(&buffer))?;
     Ok(())
 }
 
@@ -383,20 +386,33 @@ fn required_string<'a>(matches: &'a ArgMatches, name: &str) -> Result<&'a str, C
         .ok_or_else(|| CliError::usage(format!("missing required argument '{name}'")))
 }
 
+/// Turn a clap arg id (`min_fret`) into the flag a user actually typed (`--min-fret`).
+fn flag_label(name: &str) -> String {
+    format!("--{}", name.replace('_', "-"))
+}
+
 fn optional_u8(matches: &ArgMatches, name: &str, default: u8) -> Result<u8, CliError> {
     match matches.get_one::<String>(name) {
-        Some(value) => value
-            .parse::<u8>()
-            .map_err(|_| CliError::data(format!("invalid {name}: '{value}'"))),
+        // An unparseable flag value is a usage error (EX_USAGE), not a data
+        // error: the bad input is the command line, not the chord payload.
+        Some(value) => value.parse::<u8>().map_err(|_| {
+            CliError::usage(format!(
+                "invalid value '{value}' for {}: expected a whole number 0..=255",
+                flag_label(name)
+            ))
+        }),
         None => Ok(default),
     }
 }
 
 fn optional_usize(matches: &ArgMatches, name: &str, default: usize) -> Result<usize, CliError> {
     match matches.get_one::<String>(name) {
-        Some(value) => value
-            .parse::<usize>()
-            .map_err(|_| CliError::data(format!("invalid {name}: '{value}'"))),
+        Some(value) => value.parse::<usize>().map_err(|_| {
+            CliError::usage(format!(
+                "invalid value '{value}' for {}: expected a whole number",
+                flag_label(name)
+            ))
+        }),
         None => Ok(default),
     }
 }
@@ -446,17 +462,21 @@ fn write_json<T: serde::Serialize>(value: &T) -> Result<(), CliError> {
     let stdout = io::stdout();
     let mut lock = stdout.lock();
     write_json_to(&mut lock, value)?;
-    write_stdout(writeln!(lock))
+    write_stdout(writeln!(lock))?;
+    Ok(())
 }
 
-fn write_json_to<T: serde::Serialize>(out: &mut impl Write, value: &T) -> Result<(), CliError> {
+fn write_json_to<T: serde::Serialize>(
+    out: &mut impl Write,
+    value: &T,
+) -> Result<StdoutStatus, CliError> {
     if let Err(error) = serde_json::to_writer(out, value) {
         if error.io_error_kind() == Some(io::ErrorKind::BrokenPipe) {
-            return Ok(());
+            return Ok(StdoutStatus::Closed);
         }
         return Err(CliError::internal(format!("write json: {error}")));
     }
-    Ok(())
+    Ok(StdoutStatus::Open)
 }
 
 #[derive(serde::Serialize)]
@@ -474,27 +494,48 @@ fn write_explained_voicings_json(
     let score_context = VoicingScoreContext::new(chord, tuning)?;
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    write_stdout(write!(out, "["))?;
+    if write_stdout(write!(out, "["))?.is_closed() {
+        return Ok(());
+    }
     for (idx, result) in results.iter().enumerate() {
         if idx > 0 {
             write_stdout(write!(out, ","))?;
         }
         let score_breakdown = score_context.breakdown(&result.frets)?;
-        write_json_to(
+        let status = write_json_to(
             &mut out,
             &ExplainedVoicing {
                 voicing: result,
                 score_breakdown,
             },
         )?;
+        if status.is_closed() {
+            return Ok(());
+        }
     }
-    write_stdout(writeln!(out, "]"))
+    write_stdout(writeln!(out, "]"))?;
+    Ok(())
 }
 
-fn write_stdout(result: io::Result<()>) -> Result<(), CliError> {
+/// Whether stdout is still accepting writes. A closed downstream pipe (e.g.
+/// `chordclaw voicings --all C | head`) is not an error, but callers that loop
+/// over large result sets can stop early instead of computing discarded output.
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum StdoutStatus {
+    Open,
+    Closed,
+}
+
+impl StdoutStatus {
+    fn is_closed(self) -> bool {
+        self == StdoutStatus::Closed
+    }
+}
+
+fn write_stdout(result: io::Result<()>) -> Result<StdoutStatus, CliError> {
     match result {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Ok(()) => Ok(StdoutStatus::Open),
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(StdoutStatus::Closed),
         Err(error) => Err(CliError::internal(format!("write stdout: {error}"))),
     }
 }
@@ -508,7 +549,8 @@ fn print_analyze(
     let mut out = stdout.lock();
     write_stdout(writeln!(out, "{}", symbol.name()))?;
     write_stdout(writeln!(out, "Notes: {}", notes.join(" ")))?;
-    write_stdout(writeln!(out, "Intervals: {}", intervals.join(" ")))
+    write_stdout(writeln!(out, "Intervals: {}", intervals.join(" ")))?;
+    Ok(())
 }
 
 fn print_identify(
@@ -552,7 +594,9 @@ fn print_identify(
                 write_stdout(writeln!(out, "Also: {aliases}"))?;
             }
         }
-        None => write_stdout(writeln!(out, "Primary: Unknown"))?,
+        None => {
+            write_stdout(writeln!(out, "Primary: Unknown"))?;
+        }
     }
 
     if explain {
@@ -592,7 +636,8 @@ fn print_analysis_candidate(
         write_stdout(write!(out, " omit="))?;
         write_stdout(write_joined_strings(out, &analysis.omissions, ","))?;
     }
-    write_stdout(writeln!(out))
+    write_stdout(writeln!(out))?;
+    Ok(())
 }
 
 fn print_voicings(
@@ -618,10 +663,14 @@ fn print_voicings(
 
     if diagram {
         for (idx, result) in results.iter().enumerate() {
-            if idx > 0 {
-                write_stdout(writeln!(out))?;
+            if idx > 0 && write_stdout(writeln!(out))?.is_closed() {
+                break;
             }
-            print_voicing_diagram_block(&mut out, tuning, result, score_context.as_ref())?;
+            if print_voicing_diagram_block(&mut out, tuning, result, score_context.as_ref())?
+                .is_closed()
+            {
+                break;
+            }
         }
         return Ok(());
     }
@@ -696,7 +745,6 @@ fn print_voicings(
             write_padded_joined_strings(&mut out, &result.notes, " ", notes_width)?;
             write_stdout(write!(out, " | "))?;
             write_stdout(write_joined_strings(&mut out, &result.omissions, ","))?;
-            write_stdout(writeln!(out))?;
         } else if explain {
             write_stdout(write!(
                 out,
@@ -704,17 +752,19 @@ fn print_voicings(
                 result.compact, result.score
             ))?;
             write_stdout(write_joined_strings(&mut out, &result.notes, " "))?;
-            write_stdout(writeln!(out))?;
         } else if has_omissions {
             write_stdout(write!(out, "{:<compact_width$} | ", result.compact))?;
             write_padded_joined_strings(&mut out, &result.notes, " ", notes_width)?;
             write_stdout(write!(out, " | "))?;
             write_stdout(write_joined_strings(&mut out, &result.omissions, ","))?;
-            write_stdout(writeln!(out))?;
         } else {
             write_stdout(write!(out, "{:<compact_width$} | ", result.compact))?;
             write_stdout(write_joined_strings(&mut out, &result.notes, " "))?;
-            write_stdout(writeln!(out))?;
+        }
+        // Stop once the downstream pipe closes (e.g. `| head`) instead of
+        // formatting the remaining rows for output nobody reads.
+        if write_stdout(writeln!(out))?.is_closed() {
+            break;
         }
     }
 
@@ -724,7 +774,10 @@ fn print_voicings(
         if let Some(score_context) = &score_context {
             for result in results {
                 let breakdown = score_context.breakdown(&result.frets)?;
-                write_score_breakdown(&mut out, result.compact.as_str(), &breakdown)?;
+                if write_score_breakdown(&mut out, result.compact.as_str(), &breakdown)?.is_closed()
+                {
+                    break;
+                }
             }
         }
     }
@@ -737,7 +790,7 @@ fn print_voicing_diagram_block(
     tuning: GuitarTuning,
     result: &Voicing,
     score_context: Option<&VoicingScoreContext>,
-) -> Result<(), CliError> {
+) -> Result<StdoutStatus, CliError> {
     write_stdout(write!(out, "{}", result.compact))?;
     if score_context.is_some() {
         write_stdout(write!(out, " score={}", result.score))?;
@@ -749,12 +802,12 @@ fn print_voicing_diagram_block(
     write_stdout(write!(out, " notes="))?;
     write_stdout(write_joined_strings(out, &result.notes, " "))?;
     write_stdout(writeln!(out))?;
-    print_voicing_diagram(out, tuning, result)?;
+    let status = print_voicing_diagram(out, tuning, result)?;
     if let Some(score_context) = score_context {
         let breakdown = score_context.breakdown(&result.frets)?;
-        write_score_breakdown(out, result.compact.as_str(), &breakdown)?;
+        return write_score_breakdown(out, result.compact.as_str(), &breakdown);
     }
-    Ok(())
+    Ok(status)
 }
 
 fn print_identify_diagram(
@@ -779,7 +832,7 @@ fn print_voicing_diagram(
     out: &mut impl Write,
     tuning: GuitarTuning,
     result: &Voicing,
-) -> Result<(), CliError> {
+) -> Result<StdoutStatus, CliError> {
     let mut note_by_string = [None::<&str>; GUITAR8_STRING_COUNT];
     let mut note_idx = 0usize;
     for (string, fret) in result.frets.iter().enumerate() {
@@ -789,29 +842,31 @@ fn print_voicing_diagram(
         }
     }
 
+    let mut status = StdoutStatus::Open;
     for string in (0..tuning.string_count()).rev() {
         write_stdout(write!(out, "{:>3}|", tuning.notes()[string]))?;
         write_fret_cell(out, result.frets[string])?;
         if let Some(note) = note_by_string[string] {
             write_stdout(write!(out, " {note}"))?;
         }
-        write_stdout(writeln!(out))?;
+        status = write_stdout(writeln!(out))?;
     }
-    Ok(())
+    Ok(status)
 }
 
 fn write_fret_cell(out: &mut impl Write, fret: Option<u8>) -> Result<(), CliError> {
     match fret {
-        Some(fret) => write_stdout(write!(out, "--{fret:>2}--")),
-        None => write_stdout(write!(out, "-- x--")),
-    }
+        Some(fret) => write_stdout(write!(out, "--{fret:>2}--"))?,
+        None => write_stdout(write!(out, "-- x--"))?,
+    };
+    Ok(())
 }
 
 fn write_score_breakdown(
     out: &mut impl Write,
     compact: &str,
     breakdown: &VoicingScoreBreakdown,
-) -> Result<(), CliError> {
+) -> Result<StdoutStatus, CliError> {
     write_stdout(write!(
         out,
         "{compact}: score total={} costs(",
@@ -923,7 +978,8 @@ fn write_component(
         write_stdout(write!(out, ", "))?;
     }
     *wrote = true;
-    write_stdout(write!(out, "{name}={value}"))
+    write_stdout(write!(out, "{name}={value}"))?;
+    Ok(())
 }
 
 fn joined_string_len(items: &[String], separator_len: usize) -> usize {
@@ -960,7 +1016,8 @@ fn write_padding(out: &mut impl Write, mut count: usize) -> Result<(), CliError>
         write_stdout(out.write_all(SPACES))?;
         count -= SPACES.len();
     }
-    write_stdout(out.write_all(&SPACES[..count]))
+    write_stdout(out.write_all(&SPACES[..count]))?;
+    Ok(())
 }
 
 const fn decimal_width(mut value: u32) -> usize {
