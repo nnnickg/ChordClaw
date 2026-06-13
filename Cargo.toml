@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.package]
 version = "1.5.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 repository = "https://github.com/nnnickg/chordclaw"
 homepage = "https://github.com/nnnickg/chordclaw"
 

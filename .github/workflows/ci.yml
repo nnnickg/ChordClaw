@@ -39,6 +39,11 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+      - name: WASM Feature Matrix
+        run: |
+          cargo test -p chordclaw-wasm --no-default-features --features identify --locked
+          cargo test -p chordclaw-wasm --all-features --locked
+
       - name: Benchmark Contract
         run: cargo bench -p chordclaw-core --bench perf --locked
 

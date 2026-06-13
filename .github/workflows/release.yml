@@ -67,6 +67,7 @@ jobs:
           dist="$RUNNER_TEMP/chordclaw-release"
           mkdir -p "$dist/$asset"
           cp target/release/chordclaw "$dist/$asset/chordclaw"
+          cp LICENSE-MIT NOTICE.md README.md "$dist/$asset/"
           tar -C "$dist" -czf "$dist/$asset.tar.gz" "$asset"
           shasum -a 256 "$dist/$asset.tar.gz" | tee "$dist/$asset.tar.gz.sha256"
           echo "RELEASE_ASSET=$dist/$asset.tar.gz" >> "$GITHUB_ENV"
