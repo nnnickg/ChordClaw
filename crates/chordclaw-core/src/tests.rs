@@ -306,6 +306,28 @@ fn supports_explicit_ukulele_tuning_octaves() {
         "C6/G"
     );
 
+    let b_tuning = Tuning::parse_for_instrument("B3,C4,E4,A4", Instrument::Ukulele).unwrap();
+    let cb_tuning = Tuning::parse_for_instrument("Cb4,C4,E4,A4", Instrument::Ukulele).unwrap();
+    assert_eq!(
+        cb_tuning.absolute_pitch(0, 0),
+        b_tuning.absolute_pitch(0, 0)
+    );
+    assert_eq!(
+        identify_with_tuning("0000", cb_tuning)
+            .unwrap()
+            .primary
+            .expect("enharmonic Cb primary")
+            .symbol,
+        "Am/B"
+    );
+
+    let c_tuning = Tuning::parse_for_instrument("C4,C4,E4,A4", Instrument::Ukulele).unwrap();
+    let b_sharp_tuning = Tuning::parse_for_instrument("B#3,C4,E4,A4", Instrument::Ukulele).unwrap();
+    assert_eq!(
+        b_sharp_tuning.absolute_pitch(0, 0),
+        c_tuning.absolute_pitch(0, 0)
+    );
+
     let transposed_high_g =
         Tuning::parse_for_instrument("Ab,Db,F,Bb", Instrument::Ukulele).unwrap();
     assert_eq!(
@@ -1469,6 +1491,30 @@ fn voicing_score_breakdown_rejects_extra_pitches() {
         .expect_err("non-chord pitch should fail");
 
     assert!(error.to_string().contains("outside the chord"), "{error}");
+}
+
+#[test]
+fn instrument_bonus_does_not_erase_post_bonus_penalties() {
+    let breakdown = voicing_score_breakdown_with_tuning(
+        "Cadd9",
+        STANDARD_TUNING,
+        &[None, Some(3), Some(0), Some(0), Some(3), Some(0)],
+    )
+    .unwrap();
+
+    let post_bonus_penalties = breakdown.harmonic_defect_cost
+        + breakdown.internal_mute_quality_cost
+        + breakdown.trailing_mute_cost
+        + breakdown.sparse_duplicate_pitch_cost
+        + breakdown.open_chord_tone_bypass_cost
+        + breakdown.low_added_ninth_cluster_cost
+        + breakdown.fingering_complexity_cost
+        + breakdown.instrument_cost;
+
+    assert!(breakdown.instrument_bonus > 0, "{breakdown:?}");
+    assert!(breakdown.low_added_ninth_cluster_cost > 0, "{breakdown:?}");
+    assert!(post_bonus_penalties > 0, "{breakdown:?}");
+    assert!(breakdown.total >= post_bonus_penalties, "{breakdown:?}");
 }
 
 #[test]

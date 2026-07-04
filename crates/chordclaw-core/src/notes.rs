@@ -790,7 +790,7 @@ fn parse_optional_octave(input: &str) -> Result<(Option<i8>, &str), ChordClawErr
 }
 
 const fn absolute_note_pitch(note: NoteName, octave: i8) -> i16 {
-    octave as i16 * 12 + note.pitch_class().value() as i16
+    octave as i16 * 12 + note.letter.base_pitch() + note.accidental as i16
 }
 
 fn validate_tuning_octaves(count: usize, octave_count: usize) -> Result<(), ChordClawError> {

@@ -22,7 +22,7 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "chordclaw-cli"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chordclaw-core",
  "clap",
@@ -33,14 +33,14 @@ dependencies = [
 
 [[package]]
 name = "chordclaw-core"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "chordclaw-wasm"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chordclaw-core",
  "console_error_panic_hook",

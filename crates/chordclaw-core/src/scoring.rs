@@ -157,6 +157,7 @@ pub(crate) fn voicing_score_breakdown_with_profile(
     score = score.saturating_sub(barre_grip_bonus);
     score = score.saturating_sub(compact_low_grip_bonus);
     score = score.saturating_sub(jazz_shell_bonus);
+    score = score.saturating_sub(instrument_bonus);
     let score = score
         + harmonic_defect_cost
         + internal_mute_quality_cost
@@ -168,7 +169,7 @@ pub(crate) fn voicing_score_breakdown_with_profile(
         + instrument_cost;
 
     VoicingScoreBreakdown {
-        total: score.saturating_sub(instrument_bonus),
+        total: score,
         position_cost,
         relative_fret_cost,
         fret_span_cost,
