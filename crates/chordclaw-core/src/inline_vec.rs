@@ -3,7 +3,7 @@ use std::slice;
 
 use serde::{Serialize, Serializer};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct InlineVec<T, const N: usize> {
     len: u8,
     items: [T; N],
@@ -122,11 +122,37 @@ impl<'a, T, const N: usize> IntoIterator for &'a InlineVec<T, N> {
     }
 }
 
+impl<T: PartialEq, const N: usize> PartialEq for InlineVec<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl<T: Eq, const N: usize> Eq for InlineVec<T, N> {}
+
 impl<T: Serialize, const N: usize> Serialize for InlineVec<T, N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         self.as_slice().serialize(serializer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equality_ignores_inactive_storage_after_retain() {
+        let mut retained = InlineVec::<u8, 4>::default();
+        assert!(retained.push(1));
+        assert!(retained.push(2));
+        retained.retain(|value| *value == 2);
+
+        let mut fresh = InlineVec::<u8, 4>::default();
+        assert!(fresh.push(2));
+
+        assert_eq!(retained, fresh);
     }
 }

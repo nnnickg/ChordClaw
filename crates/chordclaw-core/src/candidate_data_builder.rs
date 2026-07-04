@@ -247,9 +247,19 @@ fn candidate_specs() -> Vec<ChordSpec> {
             && !has_redundant_alteration(spec)
             && !has_omitted_alteration(spec)
     });
-    specs.sort_unstable_by_key(ChordSpec::suffix);
-    specs.dedup_by(|left, right| left == right);
+    dedup_candidate_specs(&mut specs);
     specs
+}
+
+fn dedup_candidate_specs(specs: &mut Vec<ChordSpec>) {
+    specs.sort_unstable_by_key(ChordSpec::suffix);
+    let mut unique = Vec::with_capacity(specs.len());
+    for spec in specs.drain(..) {
+        if !unique.iter().any(|existing| existing == &spec) {
+            unique.push(spec);
+        }
+    }
+    *specs = unique;
 }
 
 fn allowed_sevenths(quality: Quality) -> &'static [Seventh] {
@@ -319,4 +329,49 @@ fn inline_alterations(values: &[Alteration]) -> InlineVec<Alteration, MAX_ALTERA
         let _ = out.push(*value);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dedup_specs_handles_suffix_collisions() {
+        let diminished_minor_seventh = ChordSpec {
+            quality: Quality::Diminished,
+            seventh: Seventh::Minor,
+            ..ChordSpec::default()
+        };
+        let diminished_seventh = ChordSpec {
+            quality: Quality::Diminished,
+            seventh: Seventh::Diminished,
+            ..ChordSpec::default()
+        };
+        assert_eq!(
+            diminished_minor_seventh.suffix(),
+            diminished_seventh.suffix()
+        );
+        assert_ne!(diminished_minor_seventh, diminished_seventh);
+
+        let mut specs = vec![
+            diminished_minor_seventh.clone(),
+            diminished_seventh,
+            diminished_minor_seventh,
+        ];
+        dedup_candidate_specs(&mut specs);
+
+        assert_eq!(specs.len(), 2);
+    }
+
+    #[test]
+    fn candidate_specs_are_unique_by_full_spec() {
+        let specs = candidate_specs();
+        for (idx, spec) in specs.iter().enumerate() {
+            assert!(
+                !specs[idx + 1..].contains(spec),
+                "duplicate candidate spec {} at index {idx}",
+                spec.suffix()
+            );
+        }
+    }
 }
