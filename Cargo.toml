@@ -21,7 +21,7 @@ clap = { version = "4.6.1", default-features = false, features = ["std", "help",
 clap_complete = "4.6.1"
 # Pinned to the exact patch: the generated JS glue must match the installed
 # wasm-bindgen-cli version, and a floating minor invites mismatch build failures.
-wasm-bindgen = "=0.2.122"
+wasm-bindgen = "=0.2.126"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
