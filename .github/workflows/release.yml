@@ -48,7 +48,7 @@ jobs:
         run: bash ./scripts/verify-release-version.sh "$RELEASE_TAG"
 
       - name: Cache
-        uses: Swatinem/rust-cache@v2.8.1
+        uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: release-cli-${{ matrix.os }}
 
